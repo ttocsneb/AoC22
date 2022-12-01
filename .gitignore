@@ -1,0 +1,6 @@
+__pycache__/
+.session
+
+inputs/
+*.txt
+!requirements.txt

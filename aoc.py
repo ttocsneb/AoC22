@@ -6,6 +6,7 @@ import importlib
 import sys
 
 import requests
+import time
 
 from pathlib import Path
 
@@ -58,6 +59,26 @@ def download_input(day: int, dest: os.PathLike):
             f.write(line)
             f.write(b'\n')
     response.close()
+
+
+def format_time(duration: float):
+    """
+    Format a duration in nanoseconds
+
+    :param duration: nanoseconds
+
+    :return: a human readable time
+    """
+    if duration < 1000:
+        return f"{duration}ns"
+    duration /= 1000
+    if duration < 1000:
+        return f"{round(duration, 1)}μs"
+    duration /= 1000
+    if duration < 1000:
+        return f"{round(duration, 1)}ms"
+    duration /= 1000
+    return f"{round(duration, 1)}s"
 
 
 def main(part: int | None = None, day: int | None = None,
@@ -135,7 +156,12 @@ def main(part: int | None = None, day: int | None = None,
             data = f.read()
 
     print(f"Day {day} Part {part}:")
-    return solver(data)
+    start = time.time_ns()
+    result = solver(data)
+    end = time.time_ns()
+    print(f"took {format_time(end - start)}")
+
+    return result
 
 
 if __name__ == '__main__':

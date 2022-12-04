@@ -208,7 +208,7 @@ pub fn leaderboard() -> Result<(), Box<dyn Error>> {
     };
 
     Ok(success(
-        "application/json",
+        "text/gemini",
         &format!(
             "
 # Advent Of Code Leaderboard

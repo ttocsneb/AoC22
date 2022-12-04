@@ -175,7 +175,7 @@ pub fn leaderboard() -> Result<(), Box<dyn Error>> {
 
     let scores = render_members(&leaderboard, &sort_method)?;
 
-    let sort_method = match sort_method.as_str() {
+    let sort_name = match sort_method.as_str() {
         "stars" => "stars",
         "global" => "global score",
         "time" => "time",
@@ -184,7 +184,7 @@ pub fn leaderboard() -> Result<(), Box<dyn Error>> {
 
     let script = get_script()?;
 
-    let sort_options = match sort_method.as_ref() {
+    let sort_options = match scores.as_ref() {
         "stars" => format!(
             "=> {script}{path}?global Sort by global score
 => {script}{path}?local Sort by local score
@@ -217,7 +217,7 @@ pub fn leaderboard() -> Result<(), Box<dyn Error>> {
 
 # Overall Scores
 
-Sorting by {sort_method}
+Sorting by {sort_name}
 
 ```table
 {scores}

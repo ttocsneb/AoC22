@@ -20,6 +20,7 @@ def contains_all(*items: set):
 
 def part1(data: str):
     total = 0
+
     for sack in data.splitlines():
         l = len(sack) // 2
         total += to_char(list(contains_all(set(sack[:l]), set(sack[l:])))[0])
@@ -31,7 +32,6 @@ def part2(data: str):
     total = 0
 
     it = iter(data.splitlines())
-
     try:
         while True:
             # compare the next 3 lines

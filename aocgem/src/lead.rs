@@ -184,7 +184,7 @@ pub fn leaderboard() -> Result<(), Box<dyn Error>> {
 
     let script = get_script()?;
 
-    let sort_options = match scores.as_ref() {
+    let sort_options = match sort_method.as_ref() {
         "stars" => format!(
             "=> {script}{path}?global Sort by global score
 => {script}{path}?local Sort by local score

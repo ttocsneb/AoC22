@@ -81,7 +81,7 @@ https://adventofcode.com/{year}/leaderboard/private/view/123456
 
 Once you have your cookie, you may log in using the link below.
 
-=> {script}{session}/{year}/leaderboard Enter your leaderboard id
+=> {script}/{session}/{year}/leaderboard Enter your leaderboard id
 
 ")))
 }

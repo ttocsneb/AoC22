@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveTime, Utc};
 use regex::Regex;
 
 use crate::{
-    cgi::{get_path, get_query, response, success},
+    cgi::{get_path, get_query, get_script, response, success},
     fetch::{fetch_leaderboard, get_age, load_leaderboard, save_leaderboard},
     leaderboard::{est_offset, Leaderboard},
 };
@@ -182,27 +182,29 @@ pub fn leaderboard() -> Result<(), Box<dyn Error>> {
         _ => "local score",
     };
 
+    let script = get_script()?;
+
     let sort_options = match sort_method.as_ref() {
-        "stars" => {
-            "=> ?global Sort by global score
-=> ?local Sort by local score
-=> ?time Sort by time"
-        }
-        "global" => {
-            "=> ?stars Sort by stars
-=> ?local Sort by local score
-=> ?time Sort by time"
-        }
-        "time" => {
-            "=> ?global Sort by global score
-=> ?local Sort by local score
-=> ?stars Sort by stars"
-        }
-        _ => {
-            "=> ?global Sort by global score
-=> ?stars Sort by stars
-=> ?time Sort by time"
-        }
+        "stars" => format!(
+            "=> {script}{path}?global Sort by global score
+=> {script}{path}?local Sort by local score
+=> {script}{path}?time Sort by time",
+        ),
+        "global" => format!(
+            "=> {script}{path}?stars Sort by stars
+=> {script}{path}?local Sort by local score
+=> {script}{path}?time Sort by time"
+        ),
+        "time" => format!(
+            "=> {script}{path}?global Sort by global score
+=> {script}{path}?local Sort by local score
+=> {script}{path}?stars Sort by stars"
+        ),
+        _ => format!(
+            "=> {script}{path}?global Sort by global score
+=> {script}{path}?stars Sort by stars
+=> {script}{path}?time Sort by time"
+        ),
     };
 
     Ok(success(

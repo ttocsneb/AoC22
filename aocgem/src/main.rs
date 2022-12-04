@@ -12,11 +12,11 @@ pub mod nav;
 
 fn handle() -> Result<(), Box<dyn Error>> {
     let paths: Vec<(Regex, &dyn Fn() -> Result<(), Box<dyn Error>>)> = vec![
-        (Regex::new(r"^/[^/]+/\d{4}/[^/]+/?$")?, &lead::leaderboard),
         (
-            Regex::new(r"^/[^/]+/\d{4}/]+/leaderboard/?$")?,
+            Regex::new(r"^/[^/]+/\d{4}/leaderboard/?$")?,
             &nav::leaderboard_select,
         ),
+        (Regex::new(r"^/[^/]+/\d{4}/[^/]+/?$")?, &lead::leaderboard),
         (Regex::new(r"^/[^/]+/\d{4}/?$")?, &nav::leaderboard),
         (Regex::new(r"^/login/?$")?, &nav::login_request),
         (Regex::new(r"^/[^/]+/?$")?, &nav::year_select),

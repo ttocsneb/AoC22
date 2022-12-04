@@ -4,9 +4,10 @@ use crate::cgi::{get_path, get_query, get_script, response, success};
 
 /// /
 pub fn login() -> Result<(), Box<dyn Error>> {
+    let script = get_script()?;
     Ok(success(
         "text/gemini",
-        "
+        &format!("
 # Advent Of Code Leaderboard
 
 Here you will be able to view a more advanced leaderboard than the one provided by advent of code. 
@@ -21,9 +22,9 @@ The easiest way to access your session key would be to go to adventofcode.com, p
 
 Once you have your cookie, you may log in using the link below.
 
-=> login Enter your session key
+=> {script}/login Enter your session key
 
-"
+")
     ))
 }
 
@@ -55,7 +56,10 @@ pub fn year_select() -> Result<(), Box<dyn Error>> {
 /// /{session}/{year}/
 pub fn leaderboard() -> Result<(), Box<dyn Error>> {
     let path = get_path()?;
-    let year = path.split('/').nth(2).unwrap();
+    let mut path = path.split('/');
+    let session = path.nth(1).unwrap();
+    let year = path.next().unwrap();
+    let script = get_script()?;
     Ok(success("text/gemini", &format!("
 # Advent Of Code Leaderboard
 
@@ -77,7 +81,7 @@ https://adventofcode.com/{year}/leaderboard/private/view/123456
 
 Once you have your cookie, you may log in using the link below.
 
-=> leaderboard Enter your leaderboard id
+=> {script}{session}/{year}/leaderboard Enter your leaderboard id
 
 ")))
 }

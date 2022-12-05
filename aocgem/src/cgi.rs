@@ -1,5 +1,7 @@
 use std::{env, error::Error, fmt::Display, result};
 use url::{self, Url};
+use urlencoding::decode;
+use std::string::FromUtf8Error;
 
 pub type Result = result::Result<Response, Box<dyn Error>>;
 
@@ -103,8 +105,8 @@ pub fn get_url() -> result::Result<Url, Box<dyn Error>> {
 }
 
 #[inline]
-pub fn get_query() -> String {
-    env::var("QUERY_STRING").unwrap()
+pub fn get_query() -> result::Result<String, FromUtf8Error> {
+    Ok(decode(&env::var("QUERY_STRING").unwrap())?.into_owned())
 }
 
 #[inline]

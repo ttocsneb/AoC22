@@ -180,7 +180,7 @@ pub fn render_leaderboard(session: &str, year: i32, group: &str) -> Result<Strin
         }
     };
 
-    let sort_method = get_query();
+    let sort_method = get_query()?;
 
     let scores = render_members(&leaderboard, &sort_method)?;
 

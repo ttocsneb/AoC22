@@ -16,9 +16,10 @@ fn handle() -> Result {
     add_routes(&mut router);
 
     let path = get_path();
+
     let m = match router.recognize(&path) {
         Ok(val) => val,
-        Err(_) => return Ok(Response::NotFound),
+        Err(_) => return Ok(Response::perm_error(format!("Could not find route for {path}"))),
     };
     let params = m.params();
 

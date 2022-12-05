@@ -23,7 +23,7 @@ fn renew_pub_leaderboard(params: &Params) -> Result {
     };
 
     let script = get_script();
-    let query = get_query();
+    let query = get_query()?;
     if query.is_empty() {
         Ok(Response::input("Enter your session key"))
     } else {
@@ -116,7 +116,7 @@ fn get_pub_year(params: &Params) -> Result {
     }
 
     let script = get_script();
-    let query = get_query();
+    let query = get_query()?;
     if query.is_empty() {
         Ok(Response::input("Which year would you like to view?"))
     } else {
@@ -130,7 +130,7 @@ fn get_pub_leaderboard(_params: &Params) -> Result {
     // /leaderboard/
 
     let script = get_script();
-    let query = get_query();
+    let query = get_query()?;
     if query.is_empty() {
         Ok(Response::input("Enter the leaderboard token"))
     } else {
@@ -148,7 +148,7 @@ fn publish_leaderboard(params: &Params) -> Result {
         Err(_) => return Ok(Response::NotFound),
     };
 
-    let query = get_query();
+    let query = get_query()?;
     if query.is_empty() {
         Ok(Response::input(
             "Are you sure you want to publish this leaderboard? (enter `yes`)",
@@ -228,7 +228,7 @@ fn get_year(params: &Params) -> Result {
     let leaderboard = params.find("leaderboard").unwrap();
 
     let script = get_script();
-    let query = get_query();
+    let query = get_query()?;
     if query.is_empty() {
         Ok(Response::input("Which year would you like to view?"))
     } else {
@@ -243,7 +243,7 @@ fn get_leaderboard(params: &Params) -> Result {
     let session = params.find("session").unwrap();
 
     let script = get_script();
-    let query = get_query();
+    let query = get_query()?;
     if query.is_empty() {
         Ok(Response::input("Enter your leaderboard id"))
     } else {
@@ -257,7 +257,7 @@ fn get_session(_params: &Params) -> Result {
     // /session/
 
     let script = get_script();
-    let query = get_query();
+    let query = get_query()?;
     if query.is_empty() {
         Ok(Response::input("Enter your session key"))
     } else {
@@ -317,7 +317,7 @@ https://adventofcode.com/2022/leaderboard/private/view/123456
 
 Follow the link below where you will be asked for your session key and leaderboard id. Once you enter them in, you will be able to view the leaderboard. If you want to make it public, you may do so from there
 
-=> {script}/login/ Login to view your leaderboard
+=> {script}/session/ Login to view your leaderboard
 
 "#
         ),
@@ -326,19 +326,19 @@ Follow the link below where you will be asked for your session key and leaderboa
 
 pub fn add_routes(router: &mut Router<&FnRoute>) {
     router.add("/", &root);
-    router.add("/session/", &get_session);
-    router.add("/session/:session/", &get_leaderboard);
-    router.add("/session/:session/:leaderboard/", &get_year);
+    router.add("/session", &get_session);
+    router.add("/session/:session", &get_leaderboard);
+    router.add("/session/:session/:leaderboard", &get_year);
     router.add(
-        "/session/:session/:leaderboard/:year/publish/",
+        "/session/:session/:leaderboard/:year/publish",
         &publish_leaderboard,
     );
-    router.add("/session/:session/:leaderboard/:year/", &view_leaderboard);
-    router.add("/leaderboard/", &get_pub_leaderboard);
-    router.add("/leaderboard/:leaderboard/", &get_pub_year);
+    router.add("/session/:session/:leaderboard/:year", &view_leaderboard);
+    router.add("/leaderboard", &get_pub_leaderboard);
+    router.add("/leaderboard/:leaderboard", &get_pub_year);
     router.add(
-        "/leaderboard/:leaderboard/:year/renew/",
+        "/leaderboard/:leaderboard/:year/renew",
         &renew_pub_leaderboard,
     );
-    router.add("/leaderboard/:leaderboard/:year/", &view_pub_leaderboard);
+    router.add("/leaderboard/:leaderboard/:year", &view_pub_leaderboard);
 }

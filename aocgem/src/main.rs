@@ -1,42 +1,41 @@
-use std::error::Error;
+use std::io::{self, Write};
 
-use cgi::{get_path, response};
+use cgi::{get_path, Response, Result};
 
-use regex::Regex;
+use route_recognizer::Router;
+use routes::{add_routes, FnRoute};
 
 pub mod cgi;
 pub mod fetch;
-pub mod lead;
 pub mod leaderboard;
-pub mod nav;
+pub mod render;
+pub mod routes;
 
-fn handle() -> Result<(), Box<dyn Error>> {
-    let paths: Vec<(Regex, &dyn Fn() -> Result<(), Box<dyn Error>>)> = vec![
-        (
-            Regex::new(r"^/[^/]+/\d{4}/leaderboard/?$")?,
-            &nav::leaderboard_select,
-        ),
-        (Regex::new(r"^/[^/]+/\d{4}/[^/]+/?$")?, &lead::leaderboard),
-        (Regex::new(r"^/[^/]+/\d{4}/?$")?, &nav::leaderboard),
-        (Regex::new(r"^/login/?$")?, &nav::login_request),
-        (Regex::new(r"^/[^/]+/?$")?, &nav::year_select),
-        (Regex::new(r"^/$")?, &nav::login),
-    ];
+fn handle() -> Result {
+    let mut router = Router::<&FnRoute>::new();
+    add_routes(&mut router);
 
-    let path = get_path()?;
+    let path = get_path();
+    let m = match router.recognize(&path) {
+        Ok(val) => val,
+        Err(_) => return Ok(Response::NotFound),
+    };
+    let params = m.params();
 
-    for (rule, handler) in paths {
-        if rule.is_match(&path) {
-            return handler();
-        }
-    }
-
-    Ok(response(51, "Path not found"))
+    m.handler()(params)
 }
 
 fn main() {
-    // handle().unwrap();
-    if let Err(err) = handle() {
-        response(42, err);
-    }
+    let response = std::panic::catch_unwind(|| match handle() {
+        Ok(response) => response,
+        Err(err) => {
+            io::stderr().write_fmt(format_args!("{err}\n")).unwrap();
+            Response::cgi_error(err)
+        }
+    });
+    let response = match response {
+        Ok(response) => response,
+        Err(_) => Response::cgi_error("Internal Error"),
+    };
+    print!("{response}")
 }

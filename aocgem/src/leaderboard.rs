@@ -113,3 +113,24 @@ pub struct Leaderboard {
     pub owner_id: i32,
     pub members: HashMap<String, Member>,
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PublicLeaderboard {
+    pub token: String,
+    pub id: String,
+    pub session: String,
+}
+
+impl PublicLeaderboard {
+    pub fn new(
+        token: impl Into<String>,
+        id: impl Into<String>,
+        session: impl Into<String>,
+    ) -> Self {
+        Self {
+            token: token.into(),
+            id: id.into(),
+            session: session.into(),
+        }
+    }
+}

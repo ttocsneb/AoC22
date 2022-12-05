@@ -1,28 +1,48 @@
 use std::{cmp::Ordering, error::Error, time::SystemTime};
 
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveTime, Utc};
-use regex::Regex;
 
 use crate::{
-    cgi::{get_path, get_query, get_script, response, success},
+    cgi::get_query,
     fetch::{fetch_leaderboard, get_age, load_leaderboard, save_leaderboard},
-    leaderboard::{est_offset, Leaderboard},
+    leaderboard::{est_offset, Leaderboard, Member},
 };
 
 fn render_duration(duration: &Duration) -> String {
-    if duration.num_seconds() < 60 {
-        let seconds = duration.num_seconds();
-        format!("{seconds}s")
-    } else if duration.num_minutes() < 60 {
-        let minutes = duration.num_minutes();
-        format!("{minutes}m")
-    } else if duration.num_hours() < 24 {
-        let hours = duration.num_hours();
-        format!("{hours}h")
-    } else {
-        let days = duration.num_days();
-        format!("{days}d")
+    let seconds = duration.num_seconds() % 60;
+    let minutes = duration.num_minutes() % 60;
+    let hours = duration.num_hours() % 60;
+
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
+}
+
+fn render_days(member: &Member, year: i32) -> String {
+    let times = member.completion_times(year);
+
+    let mut foobar = [0; 25];
+
+    for day in 0..25 {
+        if let Some((a, b)) = times.get(&(day + 1)) {
+            if let Some(_) = a {
+                foobar[day as usize] += 1;
+            }
+            if let Some(_) = b {
+                foobar[day as usize] += 1;
+            }
+        }
     }
+
+    let mut buffer = String::new();
+
+    for day in 0..25 {
+        buffer += match foobar[day] {
+            1 => "+",
+            2 => "*",
+            _ => " ",
+        };
+    }
+
+    buffer
 }
 
 fn render_members(leaderboard: &Leaderboard, sort_method: &str) -> Result<String, Box<dyn Error>> {
@@ -41,6 +61,7 @@ fn render_members(leaderboard: &Leaderboard, sort_method: &str) -> Result<String
             member.local_score.to_string(),
             member.global_score.to_string(),
             member.stars.to_string(),
+            render_days(member, year),
             render_duration(&total_time),
             &member.name,
         ));
@@ -78,7 +99,7 @@ fn render_members(leaderboard: &Leaderboard, sort_method: &str) -> Result<String
     let mut stars_w = 0;
     let mut dur_w = 0;
     let mut name_w = 0;
-    for (_, _, _, _, local, global, stars, dur, name) in &elements {
+    for (_, _, _, _, local, global, stars, _days, dur, name) in &elements {
         local_w = local.len().max(local_w);
         global_w = global.len().max(global_w);
         stars_w = stars.len().max(stars_w);
@@ -91,7 +112,8 @@ fn render_members(leaderboard: &Leaderboard, sort_method: &str) -> Result<String
     let n_t = "";
     let score_t = "Score";
     let stars_t = "Stars";
-    let dur_t = "Time";
+    let days_t = "1234567890123456789012345";
+    let dur_t = "Total Time";
     let name_t = "Name";
 
     local_w = local_w.max(score_t.len() / 2);
@@ -102,36 +124,23 @@ fn render_members(leaderboard: &Leaderboard, sort_method: &str) -> Result<String
 
     let n_w = elements.len().to_string().len() + 1;
     let score_w = local_w + global_w + 1;
+    let pre_w = n_w + score_w + stars_w + 2;
+    buffer += &format!("{n_t:<pre_w$}          1111111111222222");
     buffer += &format!(
-        "{n_t:<n_w$} {score_t:^score_w$} {stars_t:<stars_w$} {dur_t:<dur_w$} {name_t:<name_w$}\n"
+        "\n{n_t:<n_w$} {score_t:^score_w$} {stars_t:<stars_w$} {days_t} {dur_t:<dur_w$} {name_t:<name_w$}"
     );
 
-    for (i, (_, _, _, _, local, global, stars, dur, name)) in elements.into_iter().enumerate() {
+    for (i, (_, _, _, _, local, global, stars, days, dur, name)) in elements.into_iter().enumerate()
+    {
         let i = i + 1;
         let i = format!("{i}.");
-        buffer += &format!("{i:<n_w$} {local:>local_w$}:{global:<global_w$} {stars:<stars_w$} {dur:>dur_w$} {name:<name_w$}\n");
+        buffer += &format!("\n{i:>n_w$} {local:>local_w$}:{global:<global_w$} {stars:<stars_w$} {days} {dur:>dur_w$} {name:<name_w$}");
     }
 
     Ok(buffer)
 }
 
-/// /{session}/{year}/{leaderboard}/
-pub fn leaderboard() -> Result<(), Box<dyn Error>> {
-    let regex = Regex::new(r"^/([^/]+)/(\d{4})/([^/]+)").unwrap();
-
-    let path = get_path()?;
-
-    let captures = match regex.captures(&path) {
-        Some(captures) => captures,
-        None => {
-            return Ok(response(51, "Path not found"));
-        }
-    };
-
-    let session = captures.get(1).unwrap().as_str();
-    let year = i32::from_str_radix(captures.get(2).unwrap().as_str(), 10).unwrap();
-    let group = captures.get(3).unwrap().as_str();
-
+pub fn render_leaderboard(session: &str, year: i32, group: &str) -> Result<String, Box<dyn Error>> {
     let now = DateTime::<Utc>::from(SystemTime::now());
     let now = DateTime::<FixedOffset>::from_utc(now.naive_utc(), est_offset());
 
@@ -171,7 +180,7 @@ pub fn leaderboard() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let sort_method = get_query()?;
+    let sort_method = get_query();
 
     let scores = render_members(&leaderboard, &sort_method)?;
 
@@ -182,50 +191,38 @@ pub fn leaderboard() -> Result<(), Box<dyn Error>> {
         _ => "local score",
     };
 
-    let script = get_script()?;
-
     let sort_options = match sort_method.as_ref() {
         "stars" => format!(
-            "=> {script}{path}?global Sort by global score
-=> {script}{path}?local Sort by local score
-=> {script}{path}?time Sort by time",
+            "=> ?global Sort by global score
+=> ?local Sort by local score
+=> ?time Sort by time",
         ),
         "global" => format!(
-            "=> {script}{path}?stars Sort by stars
-=> {script}{path}?local Sort by local score
-=> {script}{path}?time Sort by time"
+            "=> ?stars Sort by stars
+=> ?local Sort by local score
+=> ?time Sort by time"
         ),
         "time" => format!(
-            "=> {script}{path}?global Sort by global score
-=> {script}{path}?local Sort by local score
-=> {script}{path}?stars Sort by stars"
+            "=> ?global Sort by global score
+=> ?local Sort by local score
+=> ?stars Sort by stars"
         ),
         _ => format!(
-            "=> {script}{path}?global Sort by global score
-=> {script}{path}?stars Sort by stars
-=> {script}{path}?time Sort by time"
+            "=> ?global Sort by global score
+=> ?stars Sort by stars
+=> ?time Sort by time"
         ),
     };
 
-    Ok(success(
-        "text/gemini",
-        &format!(
-            "
-# Advent Of Code Leaderboard
-
+    Ok(format!("
 => https://adventofcode.com/{year}/leaderboard/private/view/{group} View the leaderboard on adventofcode.com
 
-# Overall Scores
-
-Sorting by {sort_name}
+> Sorting by {sort_name}
 
 ```table
 {scores}
 ```
 
 {sort_options}
-
-"
-        ),
-    ))
+"))
 }

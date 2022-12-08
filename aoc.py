@@ -205,7 +205,8 @@ if __name__ == '__main__':
                 print(main(part=1, day=i + 1))
                 print(main(part=2, day=i + 1))
         else:
-            print(main(
+            from pprint import pprint
+            pprint(main(
                 part=args.part, day=args.day,
                 file=args.file, stdin=args.stdin
             ))

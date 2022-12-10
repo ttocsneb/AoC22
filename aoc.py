@@ -206,10 +206,14 @@ if __name__ == '__main__':
                 print(main(part=2, day=i + 1))
         else:
             from pprint import pprint
-            pprint(main(
+            val = main(
                 part=args.part, day=args.day,
                 file=args.file, stdin=args.stdin
-            ))
+            )
+            if isinstance(val, str):
+                print(val)
+            else:
+                pprint(val)
     except RuntimeError as e:
         print(e)
     except FileNotFoundError as e:

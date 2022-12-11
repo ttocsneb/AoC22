@@ -52,7 +52,7 @@ def render(data: list[str]) -> str:
 def part2(data: str):
     commands = parse(data)
 
-    output = ['.'] * (40 * 6)
+    output = [' '] * (40 * 6)
     gpu = 0
     for _, register in run(commands):
         if register - 1 <= ((gpu % 40)) <= register + 1:

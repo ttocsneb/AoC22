@@ -199,12 +199,20 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    try:
-        if args.all:
+    if args.all:
+        t = time.time_ns()
+        try:
             for i in range(25):
                 print(main(part=1, day=i + 1))
                 print(main(part=2, day=i + 1))
-        else:
+        except RuntimeError as e:
+            print(e)
+        except FileNotFoundError as e:
+            print(e)
+        duration = time.time_ns() - t
+        print(f"took {format_time(duration)} in total")
+    else:
+        try:
             from pprint import pprint
             val = main(
                 part=args.part, day=args.day,
@@ -214,7 +222,7 @@ if __name__ == '__main__':
                 print(val)
             else:
                 pprint(val)
-    except RuntimeError as e:
-        print(e)
-    except FileNotFoundError as e:
-        print(e)
+        except RuntimeError as e:
+            print(e)
+        except FileNotFoundError as e:
+            print(e)

@@ -257,6 +257,9 @@ pub fn render_leaderboard(session: &str, year: i32, group: &str) -> Result<Strin
     let mut color_select = query.clone();
     let color_name = if render_color {
         color_select.erase("c");
+        if color_select.is_empty() {
+            color_select.replace("s", "time".into());
+        }
         "Disable Colors"
     } else {
         color_select.push("c".into());

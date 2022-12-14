@@ -89,6 +89,11 @@ impl Query {
         self.named.contains_key(key)
     }
 
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.named.is_empty() && self.unnamed.is_empty()
+    }
+
     pub fn contains(&self, key: &str) -> bool {
         if self.named.contains_key(key) {
             return true;

@@ -69,11 +69,11 @@ fn view_pub_leaderboard(params: &Params) -> Result<Response> {
 
 => {script}/leaderboard/{board_id}/ View a different year
 
-> This is a public leaderboard, the leaderboard token is `{board_id}`
-
 The overall scores for each person in the leaderboard.
 
 {leaderboard}
+
+This is a shared leaderboard, anyone with the link can view it. Share this token with your friends: `{board_id}`. 
 "
             ),
         )),
@@ -81,6 +81,11 @@ The overall scores for each person in the leaderboard.
             // The session is invalid
             Ok(Response::success("text/gemini", format!("
 # Session has expired 
+
+If you think you entered an invalid year, 
+
+=> {script}/leaderboard/{board_id}/ Enter a different year 
+
 
 The session for this leaderboard has expired. To renew the leaderboard, a new session key will need to be provided. If you have access to the leaderboard, you can renew session with your own session key.
 

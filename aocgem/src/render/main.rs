@@ -1,22 +1,15 @@
 use std::{cmp::Ordering, error::Error, time::SystemTime};
 
-use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveTime, Utc};
-
 use crate::{
-    cgi::parse_query,
-    fetch::{fetch_leaderboard, get_age, load_leaderboard, save_leaderboard},
+    cgi::{get_path, get_script, parse_query},
+    fetch::get_leaderboard,
     leaderboard::{est_offset, Leaderboard, Member},
 };
 
+use super::render_duration;
+
 use ansi_term::{Color, Style};
-
-fn render_duration(duration: &Duration) -> String {
-    let seconds = duration.num_seconds() % 60;
-    let minutes = duration.num_minutes() % 60;
-    let hours = duration.num_hours() % 60;
-
-    format!("{hours:02}:{minutes:02}:{seconds:02}")
-}
+use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, Utc};
 
 fn render_days(member: &Member, year: i32, render_color: bool) -> String {
     let times = member.completion_times(year);
@@ -41,7 +34,7 @@ fn render_days(member: &Member, year: i32, render_color: bool) -> String {
         if render_color {
             let next_color = match foobar[day] {
                 1 => Style::default(),
-                2 => Color::Yellow.bold(),
+                2 => Color::Yellow.normal(),
                 _ => Color::Fixed(8).blink(),
             };
             buffer += &color.infix(next_color).to_string();
@@ -72,12 +65,15 @@ fn render_members(
         let total_time = member.total_completion_time(year);
         let average_time = match member.stars == 0 {
             true => total_time,
-            false => total_time / member.stars,
+            false => match total_time {
+                Some(t) => Some(t / member.stars),
+                None => None,
+            },
         };
         elements.push((
             // Sorting elements
             member.local_score,
-            average_time.num_seconds(),
+            average_time.map(|t| t.num_seconds()),
             member.global_score,
             member.stars,
             // Data
@@ -85,8 +81,14 @@ fn render_members(
             member.global_score.to_string(),
             member.stars.to_string(),
             render_days(member, year, render_color),
-            render_duration(&total_time),
-            render_duration(&average_time),
+            match total_time {
+                Some(d) => render_duration(&d),
+                None => "--:--:--".to_owned(),
+            },
+            match average_time {
+                Some(d) => render_duration(&d),
+                None => "--:--:--".to_owned(),
+            },
             &member.name,
         ));
     }
@@ -169,45 +171,9 @@ fn render_members(
     Ok(buffer)
 }
 
-pub fn render_leaderboard(session: &str, year: i32, group: &str) -> Result<String, Box<dyn Error>> {
-    let now = DateTime::<Utc>::from(SystemTime::now());
-    let now = DateTime::<FixedOffset>::from_utc(now.naive_utc(), est_offset());
+pub fn render_leaderboard(session: &str, year: i32, id: &str) -> Result<String, Box<dyn Error>> {
+    let leaderboard = get_leaderboard(session, year, id)?;
 
-    let age = get_age(group, year)?;
-    let start = NaiveDate::from_ymd_opt(year, 12, 1).unwrap();
-    let end = NaiveDate::from_ymd_opt(year, 12, 25).unwrap();
-
-    let leaderboard = if now.date_naive() >= start && now.date_naive() <= end {
-        // The competition is active
-        let start = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-        let end = NaiveTime::from_hms_opt(1, 0, 0).unwrap();
-        if now.time() >= start && now.time() <= end {
-            // The competition has recently started
-
-            // Don't use any caches
-            let leaderboard = fetch_leaderboard(session, group, year)?;
-            save_leaderboard(&leaderboard, group, year)?;
-            leaderboard
-        } else {
-            // Keep a 1 minute cache
-            if age.as_secs() > 60 {
-                let leaderboard = fetch_leaderboard(session, group, year)?;
-                save_leaderboard(&leaderboard, group, year)?;
-                leaderboard
-            } else {
-                load_leaderboard(group, year)?
-            }
-        }
-    } else {
-        // Keep a 1 hour cache
-        if age.as_secs() > 3600 {
-            let leaderboard = fetch_leaderboard(session, group, year)?;
-            save_leaderboard(&leaderboard, group, year)?;
-            leaderboard
-        } else {
-            load_leaderboard(group, year)?
-        }
-    };
     let query = parse_query()?;
     let sort_method = query.get_value("s").unwrap_or("local");
     let render_color = query.contains("c");
@@ -266,17 +232,37 @@ pub fn render_leaderboard(session: &str, year: i32, group: &str) -> Result<Strin
         "Enable Colors"
     };
 
-    Ok(format!("
-=> https://adventofcode.com/{year}/leaderboard/private/view/{group} View the leaderboard on adventofcode.com
+    let now = DateTime::<Utc>::from(SystemTime::now());
+    let now = DateTime::<FixedOffset>::from_utc(now.naive_utc(), est_offset());
+    let today = now.date_naive();
 
-```table
-{scores}
-```
+    let latest = NaiveDate::from_ymd_opt(year, 12, 25).unwrap();
+    let latest_day = match today > latest {
+        true => latest.day(),
+        false => today.day(),
+    };
+
+    let script = get_script();
+    let path = get_path();
+    Ok(format!("
+=> https://adventofcode.com/{year}/leaderboard/private/view/{id} View the leaderboard on adventofcode.com
 
 > Sorting by {sort_name}
 
-{sort_options}
-         
+```leaderboard table
+{scores}
+```
+
 => ?{color_select} {color_name}
+
+{sort_options}
+
+## View times for specific days
+
+You can view statistics for a specific day's problem.
+
+=> {script}{path}/{latest_day}/ View day {latest_day}'s stats
+=> {script}{path}/day/ Select a day to view
+
 "))
 }

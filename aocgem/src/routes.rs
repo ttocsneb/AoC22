@@ -1,3 +1,4 @@
+pub mod day;
 pub mod main;
 
 use crate::cgi::{get_script, Response, Result};
@@ -60,4 +61,5 @@ Follow the link below where you will be asked for your session key and leaderboa
 pub fn add_routes(router: &mut Router<&FnRoute>) {
     router.add("/", &root);
     main::add_routes(router);
+    day::add_routes(router);
 }

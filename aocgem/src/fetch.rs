@@ -6,12 +6,13 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime, Utc};
 use reqwest::{
     blocking::Client,
     header::{HeaderMap, HeaderValue},
 };
 
-use crate::leaderboard::{Leaderboard, PublicLeaderboard};
+use crate::leaderboard::{est_offset, Leaderboard, PublicLeaderboard};
 
 pub fn fetch_leaderboard(
     session: &str,
@@ -153,4 +154,49 @@ pub fn find_pub_leaderboard(group: &str) -> Result<Option<PublicLeaderboard>, Bo
     }
 
     Ok(None)
+}
+
+pub fn get_leaderboard(session: &str, year: i32, id: &str) -> Result<Leaderboard, Box<dyn Error>> {
+    let now = DateTime::<Utc>::from(SystemTime::now());
+    let now = DateTime::<FixedOffset>::from_utc(now.naive_utc(), est_offset());
+
+    let age = get_age(id, year)?;
+    let start = NaiveDate::from_ymd_opt(year, 12, 1).unwrap();
+    let end = NaiveDate::from_ymd_opt(year, 12, 25).unwrap();
+
+    Ok(if now.date_naive() >= start && now.date_naive() <= end {
+        // The competition is active
+        let start = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let end = NaiveTime::from_hms_opt(1, 0, 0).unwrap();
+        if now.time() >= start && now.time() <= end {
+            // The competition has recently started
+
+            // Keep a 60 second cache
+            if age.as_secs() > 60 {
+                let leaderboard = fetch_leaderboard(session, id, year)?;
+                save_leaderboard(&leaderboard, id, year)?;
+                leaderboard
+            } else {
+                load_leaderboard(id, year)?
+            }
+        } else {
+            // Keep a 15 minute cache
+            if age.as_secs() > 900 {
+                let leaderboard = fetch_leaderboard(session, id, year)?;
+                save_leaderboard(&leaderboard, id, year)?;
+                leaderboard
+            } else {
+                load_leaderboard(id, year)?
+            }
+        }
+    } else {
+        // Keep a 1 hour cache
+        if age.as_secs() > 3600 {
+            let leaderboard = fetch_leaderboard(session, id, year)?;
+            save_leaderboard(&leaderboard, id, year)?;
+            leaderboard
+        } else {
+            load_leaderboard(id, year)?
+        }
+    })
 }

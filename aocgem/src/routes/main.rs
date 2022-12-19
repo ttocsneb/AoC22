@@ -205,6 +205,8 @@ The overall scores for each person in the leaderboard.
 
 {leaderboard}
 
+## This leaderboard is not public Would you like to share it?
+
 => {script}/session/{session}/{board_id}/{year}/publish/ Make this leaderboard public
 "
         ),

@@ -90,16 +90,22 @@ impl Member {
         times
     }
 
-    pub fn total_completion_time(&self, year: i32) -> Duration {
-        let mut total = Duration::seconds(0);
+    pub fn total_completion_time(&self, year: i32) -> Option<Duration> {
+        let mut total: Option<Duration> = None;
         for (day, completion) in &self.completion_day_level {
             if let Ok(day) = u32::from_str_radix(day, 10) {
                 let (a, b) = Self::calc_completion_time(year, day, completion);
                 if let Some(a) = a {
-                    total = total.checked_add(&a).unwrap();
+                    total = Some(match total {
+                        Some(t) => t.checked_add(&a).unwrap(),
+                        None => a,
+                    });
                 }
                 if let Some(b) = b {
-                    total = total.checked_add(&b).unwrap();
+                    total = Some(match total {
+                        Some(t) => t.checked_add(&b).unwrap(),
+                        None => b,
+                    });
                 }
             }
         }

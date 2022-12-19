@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from heapq import heappush, heappop
 import re
 
 
@@ -11,14 +14,14 @@ def parse(data: str):
 
     for line in lines:
         groups = parse.match(line)
-        print(line)
         assert groups is not None
         a = groups[1]
         b = int(groups[2])
 
-        valves = []
+        valves = {}
         for group in line.split(','):
-            valves.append(group.split(' ')[-1])
+            valve = group.split(' ')[-1]
+            valves[valve] = 1
 
         parsed[a] = (
             b,
@@ -27,172 +30,255 @@ def parse(data: str):
     return parsed
 
 
-def solve(parsed, position: str):
+def reduce_tree(tree: dict[str, tuple[int, dict[str, int]]], start: str):
+    to_remove = []
+    for valve, (pressure, next_valves) in tree.items():
+        if pressure != 0 or valve == start:
+            continue
+        to_remove.append(valve)
 
-    best_order = sorted(parsed.items(), key=lambda x: x[1][0], reverse=True)
-    print(best_order)
+        for a, a_dist in next_valves.items():
+            # Remove Any references to this valve
+            a_next_valves = tree[a][1]
+            del a_next_valves[valve]
+            for b, b_dist in next_valves.items():
+                if a == b:
+                    continue
+                b_next_valves = tree[b][1]
 
-    def find_max_score(pos: str, open_valves, time: int, score: int):
+                total_dist = a_dist + b_dist
+                if a_next_valves.get(b, float('inf')) > total_dist:
+                    a_next_valves[b] = total_dist
+                if b_next_valves.get(a, float('inf')) > total_dist:
+                    b_next_valves[a] = total_dist
 
-        for valve, (pressure, _) in best_order:
-            if valve not in open_valves:
-                if pos == valve:
-                    time = time - 1
-                else:
-                    time = time - 2
-                if time <= 0:
-                    return score
-                score = score + pressure * time
+    for valve in to_remove:
+        del tree[valve]
+
+
+def print_tree(tree: dict[str, tuple[int, dict[str, int]]]):
+    for valve, (pressure, next_valves) in tree.items():
+        formatted_valves = ', '.join(
+            f'{v}={d}' for v, d in next_valves.items()
+        )
+        print(
+            f'Valve {valve} has flow rate={pressure}; tunnels lead to valves {formatted_valves}'
+        )
+
+
+class Map:
+    def __init__(self, layout: dict[str, tuple[int, dict[str, int]]],
+                 agents: list[tuple[str, int, bool]], time: int,
+                 open_valves: set[str] | None = None, score: int = 0,
+                 best_order: list | None = None, previous: Map | None = None) -> None:
+        self.layout = layout
+        self.open_valves: set[str] = set(open_valves) if open_valves else set()
+        self.best_order = best_order or sorted(
+            layout.items(), key=lambda x: x[1][0], reverse=True
+        )
+        self.agents = list(agents)
+        self.time = time
+        self.score = score
+        self.previous = previous
+        self._theoretical_best_score = None
+
+    def clone(self):
+        return self.__class__(self.layout, self.agents, self.time, self.open_valves)
+
+    def _agent_moves(self, agent: int) -> list[tuple[str, int, bool]]:
+        cur_pos, dist, open_valve = self.agents[agent]
+        if dist > 0:
+            return [(cur_pos, dist, open_valve)]
+        moves = []
+        for next_valve, dist in self.layout[cur_pos][1].items():
+            moves.append((next_valve, dist, False))
+        if cur_pos not in self.open_valves:
+            moves.append((cur_pos, 1, True))
+        return moves
+
+    def _all_agent_moves(self, cur_agent: int = 0) -> list[list[tuple[str, int, bool]]]:
+        agent_moves = self._agent_moves(cur_agent)
+        if len(self.agents) == cur_agent + 1:
+            cur_agent_moves = []
+            for move in agent_moves:
+                cur_agent_moves.append([move])
+            return cur_agent_moves
+        other_agent_moves = self._all_agent_moves(cur_agent + 1)
+
+        cur_agent_moves = []
+        for move in agent_moves:
+            for other_move in other_agent_moves:
+                cur_agent_moves.append([move, *other_move])
+        return cur_agent_moves
+
+    @property
+    def theoretical_best_score(self):
+        if self._theoretical_best_score is not None:
+            return self._theoretical_best_score
+        score = self.score
+        time = self.time
+        steps_left = len(self.agents)
+        for valve, (pressure, _) in self.best_order:
+            if pressure == 0:
+                continue
+            if steps_left == 0:
+                steps_left = len(self.agents)
+                time -= 2
+            if time <= 1:
+                break
+            if valve not in self.open_valves:
+                score += pressure * (time - 1)
+                steps_left -= 1
+        self._theoretical_best_score = score
         return score
 
-    # states = [(find_max_score(position, set(), 30, 0),
-    #            0, set(), position, 30, [])]
-    states = [(find_max_score(position, set(), 30, 0),
-               0, set(), position, 30)]
-    best_score = 0
-    # best_directions = []
+    @property
+    def is_done(self):
+        return self.score == self.theoretical_best_score
 
-    i = 0
-    while states:
-        # possible_score, score, open_valves, position, time, directions = states.pop(
-        #     0)
-        possible_score, score, open_valves, position, time = states.pop(
-            0)
+    def possible_moves(self) -> list[list[tuple[str, int, bool]]]:
+        possible_moves = []
+        for moves in self._all_agent_moves():
+            # Prune any invalid states
+            valid = True
+            opening = set()
+            for move, _, open_valve in moves:
+                # This move is to open a valve
+                if open_valve:
+                    # Don't try to open a jammed valve
+                    if self.layout[move][0] == 0:
+                        valid = False
+                        break
+                    # Don't try to open a valve some else is trying to open
+                    if move in opening:
+                        valid = False
+                        break
+                    opening.add(move)
+            if not valid:
+                continue
+            possible_moves.append(moves)
+        return possible_moves
 
-        # possible_score = find_max_score(position, open_valves, time, score)
+    def branches(self) -> list[Map]:
+        new_states = []
+        for moves in self.possible_moves():
+            time_travel = float('inf')
+            for (_, dist, _) in moves:
+                time_travel = min(time_travel, dist)
+            time_travel = int(time_travel)
+            time = self.time - time_travel
+            score = self.score
+            open_valves = set(self.open_valves)
+            updated_moves = []
+            for move, dist, open_valve in moves:
+                if open_valve:
+                    score += self.layout[move][0] * (self.time - 1)
+                    open_valves.add(move)
 
-        if time <= 0:
-            continue
-        if possible_score <= best_score:
-            continue
+                updated_moves.append((move, dist - time_travel, open_valve))
 
-        pressure, next_valves = parsed[position]
-        for valve in next_valves:
-            # directions_copy = list(directions)
-            # directions_copy.append(f"go {valve}")
-            possible_score = find_max_score(
-                position, open_valves, time - 1, score)
-            # states.append(
-            #     (possible_score, score, open_valves, valve, time - 1, directions_copy))
-            states.append(
-                (possible_score, score, open_valves, valve, time - 1))
+            new_state = self.__class__(
+                self.layout, updated_moves, time, open_valves, score, self.best_order, self
+            )
+            new_states.append(new_state)
+        return new_states
 
-        if position not in open_valves and pressure > 0:
-            # directions_copy = list(directions)
-            # directions_copy.append(f"open {position}")
-            open_valves_copy = set(open_valves)
-            open_valves_copy.add(position)
-            time -= 1
-            score = score + time * pressure
-            if score > best_score:
-                best_score = score
-                # best_directions = directions_copy
-            possible_score = find_max_score(
-                position, open_valves_copy, time, score)
-            if possible_score >= best_score:
-
-                # states.append(
-                #     (possible_score, score, open_valves_copy, position, time, directions_copy))
-                states.append(
-                    (possible_score, score, open_valves_copy, position, time))
-
-        # states.sort(reverse=True)
-        states.sort(key=lambda x: (x[1], x[0]), reverse=True)
-        if i % 1000 == 0:
-            print(
-                f'{i}: Best so far: {best_score}, items left: {len(states)}, next_item: {states[0][:5]}')
-        i += 1
-    # print(', '.join(best_directions))
-
-    return best_score
-
-
-def solve2(parsed, position: str):
-
-    best_order = sorted(parsed.items(), key=lambda x: x[1][0], reverse=True)
-    print(best_order)
-
-    def find_max_score(pos: str, open_valves, time: int, score: int):
-        for valve, (pressure, _) in best_order:
-            if valve not in open_valves:
-                if pos == valve:
-                    time = time - 1
+    def path(self) -> list[str]:
+        buffer = [
+            agent
+            for (agent, _, _) in self.agents
+        ]
+        if self.previous is not None:
+            for i, path in enumerate(self.previous.path()):
+                if self.agents[i][1] == 0:
+                    buffer[i] = path + ' ' + buffer[i]
                 else:
-                    time = time - 2
-                if time <= 0:
-                    return score
-                score = score + pressure * time
-        return score
+                    buffer[i] = f'{path} {buffer[i]}({self.agents[i][1]})'
 
-    # states = [(find_max_score(position, set(), 30, 0),
-    #            0, set(), position, 30, [])]
-    states = [(find_max_score(position, set(), 26, 0),
-               0, set(), position, position, 26)]
-    best_score = 0
-    # best_directions = []
+        return buffer
 
-    i = 0
-    while states:
-        # possible_score, score, open_valves, position, time, directions = states.pop(
-        #     0)
-        possible_score, score, open_valves, pos1, pos2, time = states.pop(
-            0)
+    def __lt__(self, other: Map):
+        if len(self.open_valves) > len(other.open_valves):
+            return True
+        elif len(self.open_valves) < len(other.open_valves):
+            return False
+        if self.time > other.time:
+            return True
+        elif self.time < other.time:
+            return False
+        if self.score > other.score:
+            return True
+        if self.score < other.score:
+            return False
+        return self.theoretical_best_score > other.theoretical_best_score
+        # if self.theoretical_best_score > other.theoretical_best_score:
+        #     return True
+        # if self.theoretical_best_score < other.theoretical_best_score:
+        #     return False
+        # return self.score > other.score
 
-        # possible_score = find_max_score(position, open_valves, time, score)
+    def __str__(self) -> str:
+        path = '\n  '.join(self.path())
+        return f'{self.score} points ({self.time} left)\n  {path}'
 
-        if time <= 0:
-            continue
-        if possible_score <= best_score:
-            continue
+    def __repr__(self) -> str:
+        return str(self)
 
-        pressure, next_valves = parsed[pos1]
-        for valve in next_valves:
-            # directions_copy = list(directions)
-            # directions_copy.append(f"go {valve}")
-            possible_score = find_max_score(
-                position, open_valves, time - 1, score)
-            # states.append(
-            #     (possible_score, score, open_valves, valve, time - 1, directions_copy))
-            states.append(
-                (possible_score, score, open_valves, valve, time - 1))
 
-        if position not in open_valves and pressure > 0:
-            # directions_copy = list(directions)
-            # directions_copy.append(f"open {position}")
-            open_valves_copy = set(open_valves)
-            open_valves_copy.add(pos1)
-            time -= 1
-            score = score + time * pressure
-            if score > best_score:
-                best_score = score
-                # best_directions = directions_copy
-            possible_score = find_max_score(
-                pos1, open_valves_copy, time, score)
-            if possible_score >= best_score:
+def solve_many(layout, start: list[str], time: int):
+    starts = [(s, 0, False) for s in start]
+    states = [Map(layout, starts, time)]
 
-                # states.append(
-                #     (possible_score, score, open_valves_copy, position, time, directions_copy))
-                states.append(
-                    (possible_score, score, open_valves_copy, position, time))
+    bssf = 0
+    solution = None
 
-        # states.sort(reverse=True)
-        states.sort(key=lambda x: (x[1], x[0]), reverse=True)
-        if i % 1000 == 0:
-            print(
-                f'{i}: Best so far: {best_score}, items left: {len(states)}, next_item: {states[0][:5]}')
-        i += 1
-    # print(', '.join(best_directions))
+    try:
+        i = 0
+        while states:
+            state = heappop(states)
 
-    return best_score
+            if state.theoretical_best_score < bssf:
+                continue
+
+            for next_state in state.branches():
+
+                if next_state.theoretical_best_score <= bssf:
+                    continue
+                if next_state.score > bssf:
+                    bssf = next_state.score
+                    solution = next_state
+                    print(
+                        f'{i}: bssf={bssf}, to_check={len(states)}, bssf={solution}'
+                    )
+
+                if next_state.is_done:
+                    continue
+
+                heappush(states, next_state)
+            i += 1
+            if i % 10000 == 0:
+                print(f'{i}: bssf={bssf}, to_check={len(states)}')
+    except KeyboardInterrupt:
+        pass
+
+    return solution
 
 
 def part1(data: str):
     parsed = parse(data)
+    reduce_tree(parsed, 'AA')
 
-    return solve(parsed, 'AA')
+    solution = solve_many(parsed, ['AA'], 30)
+    print(solution)
+
+    return solution.score if solution is not None else 0
 
 
 def part2(data: str):
     parsed = parse(data)
+    reduce_tree(parsed, 'AA')
 
-    return solve2(parsed, 'AA')
+    solution = solve_many(parsed, ['AA', 'AA'], 26)
+    print(solution)
+
+    return solution.score if solution is not None else 0
